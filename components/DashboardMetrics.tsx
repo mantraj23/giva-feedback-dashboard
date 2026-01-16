@@ -16,15 +16,24 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarEle
 export default function DashboardMetrics({ reviews }: { reviews: any[] }) {
   const { theme } = useTheme();
   const safeReviews = Array.isArray(reviews) ? reviews : [];
-  const total = safeReviews.length;
 
-  // 1. Calculate Counts
-  const pos = safeReviews.filter((r: any) => r.sentiment === 'Positive').length;
-  const neg = safeReviews.filter((r: any) => r.sentiment === 'Negative').length;
-  const neu = safeReviews.length - pos - neg;
+  // --- CHANGED: Filter out empty reviews for Sentiment Analysis ---
+  // Only consider reviews that actually have text content
+  const sentimentReviews = safeReviews.filter((r: any) => 
+    r.text && 
+    r.text.trim().length > 0 && 
+    r.text !== 'No written review'
+  );
+
+  const totalSentimentReviews = sentimentReviews.length;
+
+  // 1. Calculate Counts (using the filtered list)
+  const pos = sentimentReviews.filter((r: any) => r.sentiment === 'Positive').length;
+  const neg = sentimentReviews.filter((r: any) => r.sentiment === 'Negative').length;
+  const neu = sentimentReviews.filter((r: any) => r.sentiment === 'Neutral').length;
 
   // 2. Calculate Percentages
-  const getPercent = (count: number) => total > 0 ? Math.round((count / total) * 100) : 0;
+  const getPercent = (count: number) => totalSentimentReviews > 0 ? Math.round((count / totalSentimentReviews) * 100) : 0;
   
   const sentimentStats = [
     { label: 'Positive', count: pos, pct: getPercent(pos), color: '#22c55e' }, // Green
@@ -42,9 +51,13 @@ export default function DashboardMetrics({ reviews }: { reviews: any[] }) {
     }]
   };
 
-  // Theme Logic
+  // Theme Logic (Still uses ALL reviews because themes might technically be extracted from short text that we kept, or just to be safe)
+  // Actually, themes are only extracted if there is text, so using safeReviews is fine, 
+  // but using sentimentReviews ensures consistency between the two charts.
   const themeCounts = { Comfort: 0, Durability: 0, Appearance: 0 };
-  safeReviews.forEach((r: any) => {
+  
+  // Using the same filtered list for consistency
+  sentimentReviews.forEach((r: any) => {
     if (r.themes && Array.isArray(r.themes)) {
       r.themes.forEach((t: string) => {
         if (t === 'Comfort') themeCounts.Comfort++;
@@ -65,18 +78,16 @@ export default function DashboardMetrics({ reviews }: { reviews: any[] }) {
     }]
   };
 
-  // --- DYNAMIC STYLES (UPDATED FOR DARKER TEXT) ---
+  // --- STYLES ---
   const cardClass = theme === 'dark' 
     ? 'bg-slate-900 border-slate-800 text-white' 
-    : 'bg-white border-gray-200 text-gray-900'; // Changed to gray-900
+    : 'bg-white border-gray-200 text-gray-900'; 
 
-  // Changed to darker grays for Light Mode
   const headingClass = theme === 'dark' ? 'text-slate-300' : 'text-gray-800'; 
   const legendTextClass = theme === 'dark' ? 'text-slate-200' : 'text-gray-900';
   const legendNumberClass = theme === 'dark' ? 'text-white' : 'text-black';
   
-  // Darker chart text
-  const chartTextColor = theme === 'dark' ? '#cbd5e1' : '#334155'; // darker hex for light mode
+  const chartTextColor = theme === 'dark' ? '#cbd5e1' : '#334155';
 
   const barOptions = {
     responsive: true,
@@ -85,7 +96,7 @@ export default function DashboardMetrics({ reviews }: { reviews: any[] }) {
       y: { 
         beginAtZero: true, 
         ticks: { stepSize: 1, color: chartTextColor },
-        grid: { color: theme === 'dark' ? '#334155' : '#cbd5e1' }, // Slightly darker grid lines
+        grid: { color: theme === 'dark' ? '#334155' : '#cbd5e1' },
         title: {
           display: true,
           text: 'Count',
@@ -105,11 +116,17 @@ export default function DashboardMetrics({ reviews }: { reviews: any[] }) {
       
       {/* SENTIMENT CHART */}
       <div className={`p-6 rounded-xl border shadow-sm flex flex-col transition-colors duration-300 ${cardClass}`}>
-        <h3 className={`text-xs font-bold uppercase tracking-wider mb-4 ${headingClass}`}>Sentiment Analysis</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className={`text-xs font-bold uppercase tracking-wider ${headingClass}`}>Sentiment Analysis</h3>
+          {/* Optional: Show how many text reviews are being analyzed */}
+          <span className={`text-[10px] ${theme === 'dark' ? 'text-slate-500' : 'text-gray-400'}`}>
+            Based on {totalSentimentReviews} text reviews
+          </span>
+        </div>
         
         <div className="flex items-center justify-center gap-6 h-full">
           <div className="w-32 h-32 relative shrink-0">
-            {total > 0 ? (
+            {totalSentimentReviews > 0 ? (
               <Pie 
                 data={sentimentData} 
                 options={{ 
@@ -142,7 +159,7 @@ export default function DashboardMetrics({ reviews }: { reviews: any[] }) {
           Theme Detection
         </h3>
         <div className="w-full h-full flex items-end justify-center pb-2">
-          {total > 0 ? (
+          {totalSentimentReviews > 0 ? (
             <Bar data={themeData} options={barOptions} />
           ) : (
             <div className={`h-full flex items-center justify-center text-sm ${headingClass}`}>
